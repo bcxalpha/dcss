@@ -29,12 +29,6 @@ Vmify.SettingsDescriptor = {
         default = true,
         description = "Cache decrypted constants only for the active VM frame, then wipe on return."
     },
-    ConstantCacheSlots = {
-        type = "number",
-        default = 32,
-        min = 1,
-        description = "Maximum direct-mapped plaintext constant cache slots per active VM frame."
-    },
     IntegrityStep = {
         type = "number",
         default = 1,
@@ -85,7 +79,6 @@ function Vmify:apply(ast, pipeline)
         YieldEvery = self.YieldEvery,
         NoiseRate = self.NoiseRate,
         FrameConstantCache = self.FrameConstantCache,
-        ConstantCacheSlots = self.ConstantCacheSlots,
         IntegrityStep = self.IntegrityStep,
         TraceGuardEvery = self.TraceGuardEvery,
         InstructionCache = self.InstructionCache,

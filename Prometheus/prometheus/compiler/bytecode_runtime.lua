@@ -1,7 +1,8 @@
 -- Build-time serializer and polymorphic interpreter generator.
 -- Arithmetic stays below 2^53, so the wire format works on Lua 5.1 and Luau.
 local R = {}
-local MOD = 2147483647
+local MOD = 67108859
+local DIGEST_BASE = 2147483647
 local function rand() return math.random(10000, 1000000) end
 local function shuffle(t)
     for i = #t, 2, -1 do local j = math.random(i); t[i], t[j] = t[j], t[i] end
@@ -39,8 +40,6 @@ function R.emit(protos, constants, luaVersion, options)
     local noiseRate = tonumber(options.NoiseRate or options.noiseRate) or 96
     if noiseRate < 0 then noiseRate = 0 end
     local frameConstantCache = options.FrameConstantCache ~= false and options.frameConstantCache ~= false
-    local constantCacheSlots = math.floor(tonumber(options.ConstantCacheSlots or options.constantCacheSlots) or 32)
-    if constantCacheSlots < 1 then frameConstantCache=false; constantCacheSlots=1 end
     local integrityStep = tonumber(options.IntegrityStep or options.integrityStep) or 1
     if integrityStep < 0 then integrityStep = 0 end
     integrityStep = math.floor(integrityStep)
@@ -60,7 +59,7 @@ function R.emit(protos, constants, luaVersion, options)
     -- stay small enough that all intermediate integers remain exact doubles.
     local cipherMod = MOD - math.random(0, 997) * 2
     local constMod = MOD - math.random(998, 1997) * 2
-    local digestMod = MOD - math.random(1998, 2997) * 2
+    local digestMod = DIGEST_BASE - math.random(1998, 2997) * 2
     local cipherMuls={math.random(1009,99991),math.random(1009,99991),math.random(1009,99991)}
     local constMuls={math.random(1009,99991),math.random(1009,99991),math.random(1009,99991)}
     local roundAdds={}
@@ -74,17 +73,15 @@ function R.emit(protos, constants, luaVersion, options)
     local constDigestMul,constDigestIndexMix=math.random(1009,99991),math.random(11,997)
     local digestMaskMul,constDigestMaskMul=math.random(11,997),math.random(11,997)
     local dispatchSealMix,dispatchSealRemainderMix=math.random(1009,99991),math.random(11,997)
-    local regMul, regAdd = math.random(3, 97), rand()
-    local pcMul, pcAdd = math.random(3, 97), rand()
-    local stackMul, stackAdd = math.random(3, 97), rand()
+    local regMul, regAdd = math.random(3, 31), math.random(1000, 50000)
+    local pcMul, pcAdd = math.random(3, 31), math.random(1000, 50000)
+    local stackMul, stackAdd = math.random(3, 31), math.random(1000, 50000)
     local stateLive, stateDone = rand(), rand()
     while stateDone == stateLive do stateDone = rand() end
     local stateTail; repeat stateTail=rand() until stateTail~=stateLive and stateTail~=stateDone
     local salt, stride = rand(), math.random(101, 8191)
     local constSalt, constStride = rand(), math.random(101,8191)
     local driftMod,noiseMod=math.random(50021,120011),math.random(50021,120011)
-    local constantCacheMul=math.random(101,1009)
-    local cacheMaskA,cacheMaskB,cacheMaskC=rand(),rand(),rand()
     local guardSalt = rand()
     local function reg(id) return id * regMul + regAdd end
     local function pc(id) return id * pcMul + pcAdd end
@@ -283,14 +280,14 @@ function R.emit(protos, constants, luaVersion, options)
         }
     end
     -- Executable decoys only mutate private noise. Dead handlers have no host effects.
-    local noiseCount=math.random(6,12)
+    local noiseCount=math.random(3,5)
     for i=1,noiseCount do
         handlers["NOISE"..i] = {
             "noise=(noise+a*" .. math.random(3,97) .. "+b+c)%"..noiseMod,
             "noise=(noise~=(noise+1) and (noise+a+b+c) or noise)%"..noiseMod,
         }
     end
-    for i=1,math.random(6,12) do
+    for i=1,math.random(2,4) do
         handlers["DEAD"..i] = {
             "noise=(noise*" .. math.random(3,97) .. "+a)%"..noiseMod,
             "noise=(noise+a+b*3+c*7)%"..noiseMod,
@@ -305,9 +302,17 @@ function R.emit(protos, constants, luaVersion, options)
         FORPREP={true,true,true},FORCHECK={true,true,true},FORSTEP={true,true},ITERPREP={true,true,true},ITERNEXT={true,true,true},
     }
     local opcodes, layouts, operandMasks, used = {}, {}, {}, {}
+    local polymorphic = {
+        CONST=true, GLOBAL=true, GREF=true, GET=true, REF=true, NEW=true, ASSIGN=true,
+        INDEX=true, INDEXREF=true, CLOSURE=true, JUMP=true, JTRUE=true, JFALSE=true,
+        CALL=true, CALL1=true, CALL0=true, FCALL1=true, FCALL0=true, GCALL1=true, GCALL0=true,
+        METHOD=true, SELFCALL=true, SELF1=true, SELF0=true, MCALL1=true, MCALL0=true,
+        TAILCALL=true, TAILSELF=true, RETURN=true, FORPREP=true, FORCHECK=true, FORSTEP=true,
+        ITERPREP=true, ITERNEXT=true
+    }
     for _, name in ipairs(names) do
         opcodes[name] = {}
-        local variantCount = opcodeVariants
+        local variantCount = polymorphic[name] and opcodeVariants or 1
         for variant=1,variantCount do
             local code; repeat code=math.random(100,1000000) until not used[code]
             used[code]=true; opcodes[name][variant]=code
@@ -422,7 +427,7 @@ function R.emit(protos, constants, luaVersion, options)
     local frameFields={"cells","varargs","position","drift","result","status","tailFunction","tailArgs","noise","stack","packets","top","constantCache"}
     local frameAliases,usedAliases={},{}
     for _,field in ipairs(frameFields) do
-        local alias; repeat alias=randomIdent(math.random(6,11)) until not usedAliases[alias]
+        local alias; repeat alias=randomIdent(math.random(4,8)) until not usedAliases[alias]
         usedAliases[alias]=true; frameAliases[field]=alias
     end
     for _,name in ipairs(names) do
@@ -514,12 +519,9 @@ return (function(env,...)
     local function constant(frame,id)
         local cache=frame.constantCache
         if cache then
-            local slot=(id*CONSTCACHEMUL)%CONSTCACHESLOTS+1
-            if cache[1][slot]==id then
-                local cached=cache[2][slot]
-                if cached==nilSentinel then return nil end
-                return cached
-            end
+            local cached=cache[id]
+            if cached~=nilSentinel and cached~=nil then return cached end
+            if cached==nilSentinel then return nil end
         end
         local entry=pool[id]; local mode=entry[CMODE]; local key=entry[CKEY]; local bytes=entry[CBYTES]
         local chars={}; local tag; local state
@@ -567,8 +569,7 @@ return (function(env,...)
         elseif tag==4 then value=false
         else value=nil end
         if cache then
-            local slot=(id*CONSTCACHEMUL)%CONSTCACHESLOTS+1
-            cache[1][slot]=id; cache[2][slot]=value==nil and nilSentinel or value
+            cache[id]=value==nil and nilSentinel or value
         end
         return value
     end
@@ -656,17 +657,16 @@ return (function(env,...)
     run=function(id,captured,args)
         STARTGUARD
         local frameConstantCacheEnabled=FRAMECONSTANTCACHE
-        local localConstantCache=frameConstantCacheEnabled and {{},{}} or nil
+        local localConstantCache=frameConstantCacheEnabled and {} or nil
         local proto=prototypes[id]; verifyProto(id,proto)
         local stream=proto[PSTREAM]
         local protoKey=proto[PKEY]
         local decodeMode=proto[PMODE]
-        local cacheKey=proto[PCACHEKEY]
         local decodedCache=nil
-        -- The entry prototype normally runs once; retaining its decoded form
-        -- only helps dumpers and consumes memory. Repeated child callbacks keep
-        -- the masked memoization path for performance.
-        if INSTRUCTIONCACHE and id~=1 then
+        -- Medium keeps a decoded execution cache for all prototypes, including
+        -- the entry prototype. This removes repeated decrypt/dispatch work inside
+        -- hot loops while leaving the serialized bytecode encrypted at rest.
+        if INSTRUCTIONCACHE then
             decodedCache=decodedProtoCache[id]
             if not decodedCache then decodedCache={}; decodedProtoCache[id]=decodedCache end
         end
@@ -687,17 +687,16 @@ return (function(env,...)
             local index=(frame.position-frame.drift-PCADD)/PCMUL
             local offset=(index-1)*4
             local cacheBase=index*4
-            local opcode,a,b,c
+            local opcode,a,b,c,handler
             if decodedCache then
-                opcode=decodedCache[cacheBase-3]
-                if opcode~=nil then
-                    opcode=opcode-cacheKey
-                    a=decodedCache[cacheBase-2]-CACHEMASKA
-                    b=decodedCache[cacheBase-1]-CACHEMASKB
-                    c=decodedCache[cacheBase]-CACHEMASKC
+                handler=decodedCache[cacheBase-3]
+                if handler~=nil then
+                    a=decodedCache[cacheBase-2]
+                    b=decodedCache[cacheBase-1]
+                    c=decodedCache[cacheBase]
                 end
             end
-            if opcode==nil then
+            if handler==nil then
                 local key,cipher
                 if decodeMode==1 then
                     key=(protoKey+index*STRIDE+SALT)%CIPHERMOD
@@ -718,22 +717,21 @@ return (function(env,...)
                     key=(key*CIPHERMUL3+IADD33+protoKey)%CIPHERMOD; cipher=stream[offset+3]; b=(cipher-key-index*3)%CIPHERMOD; key=(key+cipher+21)%CIPHERMOD
                     key=(key*CIPHERMUL3+IADD34+protoKey)%CIPHERMOD; cipher=stream[offset+4]; c=(cipher-key-index*4)%CIPHERMOD
                 end
-                if decodedCache then
-                    decodedCache[cacheBase-3]=opcode+cacheKey
-                    decodedCache[cacheBase-2]=a+CACHEMASKA
-                    decodedCache[cacheBase-1]=b+CACHEMASKB
-                    decodedCache[cacheBase]=c+CACHEMASKC
-                end
             end
             frame.drift=(frame.drift+stream[offset+1])%DRIFTMOD
             frame.position=(index+1)*PCMUL+PCADD+frame.drift
-            local handler=dispatch[opcode]
+            if handler==nil then handler=dispatch[opcode] end
             if not handler then error(ERRORINSTRUCTION,0) end
+            if decodedCache and decodedCache[cacheBase-3]==nil then
+                decodedCache[cacheBase-3]=handler
+                decodedCache[cacheBase-2]=a
+                decodedCache[cacheBase-1]=b
+                decodedCache[cacheBase]=c
+            end
             handler(frame,a,b,c)
         end
         local finalStatus, finalResult, finalTailFunction, finalTailArgs = frame.status, frame.result, frame.tailFunction, frame.tailArgs
         if localConstantCache then
-            for _,bucket in pairs(localConstantCache) do for k in pairs(bucket) do bucket[k]=nil end end
             for k in pairs(localConstantCache) do localConstantCache[k]=nil end
         end
         if finalStatus==TAIL then return finalTailFunction(unpackValues(finalTailArgs,1,finalTailArgs.n)) end
@@ -793,8 +791,6 @@ end)(getfenv and getfenv() or _ENV or _G,...)
         PSTREAM=pStream,PKEY=pKey,PPARAMS=pParams,PCAPTURES=pCaptures,PDIGEST=pDigest,PMODE=pMode,PCACHEKEY=pCacheKey,
         CMODE=cMode,CKEY=cKey,CBYTES=cBytes,CDIGEST=cDigest,DRIFTMOD=driftMod,NOISEMOD=noiseMod,
         HANDLERCOUNT=#emittedHandlers,
-         CONSTCACHESLOTS=constantCacheSlots,CONSTCACHEMUL=constantCacheMul,
-         CACHEMASKA=cacheMaskA,CACHEMASKB=cacheMaskB,CACHEMASKC=cacheMaskC,
         TRACEHELPERS=traceHelpers,YIELDHELPERS=yieldHelpers,STARTGUARD=startGuard,BUDGETDECL=yieldDecl..traceDecl,BUDGETSTEP=yieldStep..traceStep,
         ERRORBYTECODE=string.format("%q",tostring(rand())..tostring(rand())),
         ERRORCONSTANT=string.format("%q",tostring(rand())..tostring(rand())),
