@@ -44,6 +44,32 @@ if (ALLOWED_CHANNELS_OBF) {
 const MAX_CODE_LENGTH = 1_000_000; // 1,000,000 characters (~1 MB)
 const MAX_FILE_SIZE = 5_000_000; // 5 MB
 
+// Keep generated attachment names unique during this bot process so repeated
+// downloads do not all use the same filename. Use a 10-digit suffix for a
+// very large name space (for example, stealthx-5839201746.lua).
+const USED_OUTPUT_NAMES = new Set();
+
+function generateOutputName() {
+  const MAX_ATTEMPTS = 100;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const number = randomInt(1_000_000_000, 10_000_000_000);
+    const name = `stealthx-${number}.lua`;
+    if (!USED_OUTPUT_NAMES.has(name)) {
+      USED_OUTPUT_NAMES.add(name);
+      return name;
+    }
+  }
+
+  // Extremely unlikely once the 9 billion possible 10-digit values are nearly
+  // exhausted. Resetting allows the bot to continue serving requests.
+  USED_OUTPUT_NAMES.clear();
+  const number = randomInt(1_000_000_000, 10_000_000_000);
+  const name = `stealthx-${number}.lua`;
+  USED_OUTPUT_NAMES.add(name);
+  return name;
+}
+
 
 // ─── Embed Colors ────────────────────────────────────────────────────────────
 const COLOR_ERROR = 0x992222;   // dark red
@@ -269,7 +295,7 @@ client.on("interactionCreate", async (interaction) => {
     const output = result.output;
     const ratio = ((output.length / code.length) * 100).toFixed(1);
     const outputBuffer = Buffer.from(output, "utf-8");
-    const outputName = "stealth-x.lua";
+    const outputName = generateOutputName();
 
     const embed = new EmbedBuilder()
       .setColor(COLOR_SUCCESS)

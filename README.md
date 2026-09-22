@@ -54,7 +54,7 @@ Opsi tambahan:
 - `pretty_print`: format output agar lebih mudah dibaca, default `false`.
 - `seed`: seed acak agar hasil dapat direproduksi.
 
-Output dikirim kembali sebagai file `stealth-x.lua`.
+Output dikirim kembali sebagai file `stealthx-XXXXXXXXXX.lua`.
 
 
 ## Medium numeric VM
