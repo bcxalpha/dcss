@@ -1,4 +1,4 @@
--- ByteCode Obfuscator name generators.
+-- Stealth X name generators.
 -- Medium uses only the shuffled mangled generator.
 
 return {

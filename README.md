@@ -1,4 +1,4 @@
-# ByteCode Discord Obfuscator
+# Stealth X Discord Obfuscator
 
 Bot Discord yang dikhususkan untuk **obfuscation Lua/LuaU** menggunakan engine Prometheus internal. Project ini tidak lagi menyertakan AI chat, pemilihan model AI, web search, atau fitur deobfuscation.
 
@@ -54,7 +54,7 @@ Opsi tambahan:
 - `pretty_print`: format output agar lebih mudah dibaca, default `false`.
 - `seed`: seed acak agar hasil dapat direproduksi.
 
-Output dikirim kembali sebagai file `bytecode.lua`.
+Output dikirim kembali sebagai file `stealth-x.lua`.
 
 
 ## Medium numeric VM

@@ -269,7 +269,7 @@ client.on("interactionCreate", async (interaction) => {
     const output = result.output;
     const ratio = ((output.length / code.length) * 100).toFixed(1);
     const outputBuffer = Buffer.from(output, "utf-8");
-    const outputName = "bytecode.lua";
+    const outputName = "stealth-x.lua";
 
     const embed = new EmbedBuilder()
       .setColor(COLOR_SUCCESS)
@@ -284,7 +284,7 @@ client.on("interactionCreate", async (interaction) => {
         { name: "Size Ratio", value: `${ratio}%`, inline: true },
         { name: "Output", value: `${(output.length / 1000).toFixed(1)} KB`, inline: true },
       )
-      .setFooter({ text: "ByteCode Obfuscator" });
+      .setFooter({ text: "Stealth X" });
 
     return interaction.editReply({
       embeds: [embed],

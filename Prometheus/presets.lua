@@ -1,4 +1,4 @@
--- ByteCode Obfuscator preset configuration.
+-- Stealth X preset configuration.
 -- Medium is the only supported runtime preset.
 
 return {

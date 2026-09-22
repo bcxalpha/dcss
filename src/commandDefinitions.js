@@ -3,7 +3,7 @@ const { SlashCommandBuilder } = require("discord.js");
 // ─── Slash Command Definition ────────────────────────────────────────────────
 const obfuscateCommand = new SlashCommandBuilder()
   .setName("obf")
-  .setDescription("Obfuscate Lua/LuaU code using ByteCode")
+  .setDescription("Obfuscate Lua/LuaU code using Stealth X")
   .addAttachmentOption((opt) =>
     opt
       .setName("file")
